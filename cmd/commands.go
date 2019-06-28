@@ -1,12 +1,14 @@
 package cmd
 
 import (
-	"github.com/nuls-io/nuls-v2-package/util"
 	"log"
 	"os"
 	"path/filepath"
 
 	"gopkg.in/urfave/cli.v2"
+
+	"github.com/nuls-io/nuls-v2-package/config"
+	"github.com/nuls-io/nuls-v2-package/util"
 )
 
 var commands = []*cli.Command{}
@@ -57,7 +59,7 @@ var removeModuleCommand = &cli.Command{
 
 func listModule(ctx *cli.Context) error {
 
-	configMap := readConfigFile(configPath)
+	configMap := config.ReadConfigFile(configPath)
 
 	for k, v := range configMap {
 		log.Println(k, " : ", v)
@@ -72,7 +74,7 @@ func addModule(ctx *cli.Context) error {
 		return nil
 	}
 
-	cfg, _ := LoadConfigFile(configPath)
+	cfg, _ := config.LoadConfigFile(configPath)
 
 	moduleName := os.Args[2]
 	v,_ := cfg.String("package", moduleName)
@@ -94,7 +96,7 @@ func removeModule(ctx *cli.Context) error {
 		return nil
 	}
 
-	cfg, _ := LoadConfigFile(configPath)
+	cfg, _ := config.LoadConfigFile(configPath)
 
 	moduleName := os.Args[2]
 	v,_ := cfg.String("package", moduleName)

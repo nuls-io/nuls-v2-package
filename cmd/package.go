@@ -1,8 +1,6 @@
 package cmd
 
 import (
-	"github.com/nuls-io/nuls-v2-package/util"
-	"gopkg.in/urfave/cli.v2"
 	"io/ioutil"
 	"log"
 	"os"
@@ -10,6 +8,11 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"gopkg.in/urfave/cli.v2"
+
+	"github.com/nuls-io/nuls-v2-package/config"
+	"github.com/nuls-io/nuls-v2-package/util"
 )
 
 var (
@@ -277,7 +280,7 @@ func doCopy() {
 		util.CopyFile(buildPath + Separator + "package-base.ncf", packageConfig)
 	}
 
-	configMap := readConfigFile(packageConfig)
+	configMap := config.ReadConfigFile(packageConfig)
 
 	// 根据配置，把需要打包的模块进行复制
 	for k, v := range configMap {
@@ -346,9 +349,9 @@ func doCopyModule(moduleName string, modulePath string, moduleVersion string) {
 }
 
 func mergeConfig(modulePath string, destDir string) {
-	defCfg, _ := LoadConfigFile(buildPath + Separator + "module-prod.ncf")
+	defCfg, _ := config.LoadConfigFile(buildPath + Separator + "module-prod.ncf")
 
-	cfg, _ := LoadConfigFile(modulePath + Separator + "module.ncf")
+	cfg, _ := config.LoadConfigFile(modulePath + Separator + "module.ncf")
 
 	for _, selectName := range defCfg.Sections() {
 		opts, err := defCfg.SectionOptions(selectName)
@@ -380,7 +383,7 @@ func copyScripts(moduleName string, modulePath string, moduleVersion string, des
 	loadLanguage := ""
 	managed := ""
 
-	cfg, _ := LoadConfigFile(modulePath + Separator + "module.ncf")
+	cfg, _ := config.LoadConfigFile(modulePath + Separator + "module.ncf")
 
 	MAIN_CLASS,_ = cfg.String("JAVA", "MAIN_CLASS")
 	JOPT_XMS,_ = cfg.String("JAVA", "JOPT_XMS")
@@ -519,7 +522,7 @@ func findModulePath(baseDir string, moduleName string) (string, string) {
 
 			if fi.Name() == "module.ncf" {
 
-				cfg, err := LoadConfigFile(baseDir + Separator + fi.Name())
+				cfg, err := config.LoadConfigFile(baseDir + Separator + fi.Name())
 				if err == nil && cfg.HasSection("JAVA") {
 					options,err := cfg.SectionOptions("JAVA")
 					if err == nil {
