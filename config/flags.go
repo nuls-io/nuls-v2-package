@@ -8,14 +8,13 @@ func init() {
 	flags = append(flags, branchFlag)
 	flags = append(flags, masterBranchFlag)
 	flags = append(flags, outputDirFlag)
+	flags = append(flags, outputNameFlag)
 	flags = append(flags, javaHomeFlag)
 	flags = append(flags, jreFlag)
 	flags = append(flags, makeTarFlag)
 	flags = append(flags, skipMvnPackageFlag)
 	flags = append(flags, addNulstarFlag)
 	flags = append(flags, nulstarFileNameFlag)
-	flags = append(flags, addModuleFlag)
-	flags = append(flags, removeModuleFlag)
 	flags = append(flags, osFlag)
 }
 
@@ -41,6 +40,13 @@ var outputDirFlag = &cli.StringFlag{
 	Value: "",
 }
 
+
+var outputNameFlag = &cli.StringFlag{
+	Name:  "n",
+	Usage: "-n <project_name>  指定输出项目名称",
+	Value: "",
+}
+
 var javaHomeFlag = &cli.StringFlag{
 	Name:  "j",
 	Usage: "-j JAVA_HOME",
@@ -49,7 +55,7 @@ var javaHomeFlag = &cli.StringFlag{
 
 var jreFlag = &cli.StringFlag{
 	Name:  "J",
-	Usage: "-J 输出的jvm虚拟机目录，脚本将会把这个目录复制到程序依赖中",
+	Usage: "-J 输出的jre目录，脚本将会把这个目录复制到程序依赖中",
 	Value: "",
 }
 
@@ -75,18 +81,6 @@ var nulstarFileNameFlag = &cli.StringFlag{
 	Name:  "nsn",
 	Usage: "打包时如果加入Nulstar模块，则需要指定最新版本的Nulstar名称",
 	Value: "nulstar-20190529.tar.gz",
-}
-
-var addModuleFlag = &cli.StringFlag{
-	Name:  "a",
-	Usage: "-a 添加一个打包模块",
-	Value: "",
-}
-
-var removeModuleFlag = &cli.StringFlag{
-	Name:  "r",
-	Usage: "-r 移除一个打包模块",
-	Value: "",
 }
 
 var osFlag = &cli.StringFlag{

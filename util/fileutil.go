@@ -12,6 +12,10 @@ import (
 	"strings"
 )
 
+var (
+	Separator = string(os.PathSeparator)
+)
+
 func PathExists(path string) (bool, error) {
 	_, err := os.Stat(path)
 	if err == nil {
@@ -28,7 +32,7 @@ func DownlaodFile(filepath string, filename string) error {
 	if err != nil {
 		return err
 	}
-	f, err := createFile(filename)
+	f, err := CreateFile(filename)
 	if err != nil {
 		return nil
 	}
@@ -59,13 +63,13 @@ func compress(file *os.File, prefix string, tw *tar.Writer) error {
 		return err
 	}
 	if info.IsDir() {
-		prefix = prefix + "/" + info.Name()
+		prefix = prefix + Separator + info.Name()
 		fileInfos, err := file.Readdir(-1)
 		if err != nil {
 			return err
 		}
 		for _, fi := range fileInfos {
-			f, err := os.Open(file.Name() + "/" + fi.Name())
+			f, err := os.Open(file.Name() + Separator + fi.Name())
 			if err != nil {
 				return err
 			}
@@ -76,7 +80,7 @@ func compress(file *os.File, prefix string, tw *tar.Writer) error {
 		}
 	} else {
 		header, err := tar.FileInfoHeader(info, "")
-		header.Name = prefix + "/" + header.Name
+		header.Name = prefix + Separator + header.Name
 		if err != nil {
 			return err
 		}
@@ -118,18 +122,24 @@ func DeCompress(tarFile, dest string) error {
 		if hdr.Typeflag == 53 {
 			continue
 		}
-		filename := dest + hdr.Name
-		file, err := createFile(filename)
+		fname := hdr.Name
+		if strings.Index(fname, Separator) == -1 {
+			fname = strings.Replace(fname, "/", Separator, -1)
+		}
+		filename := dest + fname
+		file, err := CreateFile(filename)
 		if err != nil {
 			return err
 		}
 		io.Copy(file, tr)
+		file.Close()
 	}
 	return nil
 }
 
-func createFile(name string) (*os.File, error) {
-	err := os.MkdirAll(string([]rune(name)[0:strings.LastIndex(name, "/")]), 0755)
+func CreateFile(name string) (*os.File, error) {
+
+	err := os.MkdirAll(string([]rune(name)[0:strings.LastIndex(name, Separator)]), 0755)
 	if err != nil {
 		return nil, err
 	}
@@ -173,10 +183,10 @@ func CopyDir(srcPath string, destPath string) error {
 			return err
 		}
 		if !f.IsDir() {
-			path := strings.Replace(path, "\\", "/", -1)
+			//path := strings.Replace(path, "\\", "/", -1)
 			destNewPath := strings.Replace(path, srcPath, destPath, -1)
 			fmt.Println("复制文件:" + path + " 到 " + destNewPath)
-			copyFile(path, destNewPath)
+			CopyFile(path, destNewPath)
 		}
 		return nil
 	})
@@ -187,7 +197,7 @@ func CopyDir(srcPath string, destPath string) error {
 }
 
 //生成目录并拷贝文件
-func copyFile(src, dest string) (w int64, err error) {
+func CopyFile(src, dest string) (w int64, err error) {
 	srcFile, err := os.Open(src)
 	if err != nil {
 		fmt.Println(err.Error())
@@ -195,13 +205,13 @@ func copyFile(src, dest string) (w int64, err error) {
 	}
 	defer srcFile.Close()
 	//分割path目录
-	destSplitPathDirs := strings.Split(dest, "/")
+	destSplitPathDirs := strings.Split(dest, Separator)
 
 	//检测时候存在目录
 	destSplitPath := ""
 	for index, dir := range destSplitPathDirs {
 		if index < len(destSplitPathDirs)-1 {
-			destSplitPath = destSplitPath + dir + "/"
+			destSplitPath = destSplitPath + dir + Separator
 			b, _ := PathExists(destSplitPath)
 			if b == false {
 				fmt.Println("创建目录:" + destSplitPath)
@@ -221,4 +231,23 @@ func copyFile(src, dest string) (w int64, err error) {
 	defer dstFile.Close()
 
 	return io.Copy(dstFile, srcFile)
+}
+
+func ReadAllIntoMemory(filename string) (content []byte, err error) {
+	fp, err := os.Open(filename)
+	if err != nil {
+		return nil, err
+	}
+	defer fp.Close()
+
+	fileInfo, err := fp.Stat()
+	if err != nil {
+		return nil, err
+	}
+	buffer := make([]byte, fileInfo.Size())
+	_, err = fp.Read(buffer)
+	if err != nil {
+		return nil, err
+	}
+	return buffer, nil
 }
