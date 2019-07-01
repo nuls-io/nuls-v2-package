@@ -6,6 +6,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"strings"
 
@@ -47,11 +48,10 @@ var (
 	osVersion = "Linux"
 	//是否压缩输出目录
 	zip = false
+	jreHome = ""
 )
 
 func DoPackage(ctx *cli.Context) error {
-
-	//test()
 
 	// 检查系统环境，是否支持打包
 	check()
@@ -65,12 +65,14 @@ func DoPackage(ctx *cli.Context) error {
 	// 更新代码
 	doUpdateCode()
 
-	// 打包jre
+	// 工程maven打包
 	doMvn()
 
 	doCopy()
 
 	doTar()
+
+	log.Println("Congratulations, packaged!")
 
 	return nil
 }
@@ -94,6 +96,31 @@ func check() {
 		os.Exit(-1)
 	}
 	log.Println("check mvn : ok")
+
+	//check java command and java version
+	args = []string{"-version"}
+	err, _, errOut = util.ExecCommand("java", args)
+	if err != nil {
+		log.Println("The system cannot find the java command. Please confirm that java is installed and the environment variables are configured correctly.")
+		os.Exit(-1)
+	}
+	if strings.Index(errOut, "java version") == -1 {
+		log.Println("The system cannot find the java command.")
+		os.Exit(-1)
+	}
+	reg := regexp.MustCompile(`\"([^\"]*)\"`)
+	versionStrs := reg.FindAllString(errOut, -1)
+	if len(versionStrs) == 0 {
+		log.Println("Maybe the system cannot find the java command.")
+		os.Exit(-1)
+	}
+	javaVersion := strings.Replace(versionStrs[0], "\"", "", -1)
+	if strings.Index(javaVersion, "11.0") == -1 {
+		log.Println("The java version need 11, current version is ", javaVersion)
+		os.Exit(-1)
+	}
+
+	log.Println("check java : ok")
 }
 
 // initialize params
@@ -157,6 +184,10 @@ func initialize(ctx *cli.Context) {
 		zip = true
 	}
 
+	if ctx.String("j") != "" {
+		jreHome = ctx.String("j")
+	}
+
 	// Packaged name
 	nulsWalletName = ctx.String("n")
 	if nulsWalletName == "" {
@@ -212,10 +243,15 @@ func doDownload() {
 	util.CopyDir(tempDir + "Release" + Separator + "Libraries", nulsWalletPath + Separator + "Libraries")
 
 	if osVersion == "Linux" {
-		//str := "
-		//	#!/bin/bash
-		//	cd \`dirname $0\`
-		//	"
+		str := "#!/bin/bash\ncd `dirname $0`\n"
+
+		startCmdBytes,_ := util.ReadAllIntoMemory(tempDir + "Release" + Separator + "Nulstar.sh")
+		startCmd := strings.TrimSpace(string(startCmdBytes))
+
+		str += startCmd + " &"
+
+		startFile := nulsWalletPath + Separator + "start"
+		ioutil.WriteFile(startFile, []byte(str), 0777)
 	}
 
 	// Delete the extracted file
@@ -287,14 +323,46 @@ func doCopy() {
 		if v == "0" {
 			continue
 		}
-		if v == "mykernel" && !doMock {
-			continue
+		if k == "mykernel" {
+			doMock = true
 		}
 		path, version := findModulePath(projectDir, k)
 		if path != "" && version != "" {
 			doCopyModule(k, path, version)
 		}
 	}
+
+	if doMock {
+		//复制mykernel的启动和停止脚本
+		util.CopyExecFile(buildPath + Separator + "start-mykernel", nulsWalletPath + Separator + "start-mykernel")
+		util.CopyExecFile(buildPath + Separator + "stop-mykernel", nulsWalletPath + Separator + "stop-mykernel")
+	}
+
+	util.CopyFile(buildPath + Separator + "default-config.ncf", nulsWalletPath + Separator + ".default-config.ncf")
+	util.CopyExecFile(buildPath + Separator + "cmd", nulsWalletPath + Separator + "cmd")
+	util.CopyExecFile(buildPath + Separator + "create-address", nulsWalletPath + Separator + "create-address")
+	util.CopyExecFile(buildPath + Separator + "func", nulsWalletPath + Separator + "func")
+	util.CopyExecFile(buildPath + Separator + "test", nulsWalletPath + Separator + "test")
+
+	// 复制jre
+	copyJre()
+}
+
+func copyJre() {
+	if jreHome == "" {
+		log.Println("not set jreHome, skip copy jre.")
+		return
+	}
+	log.Println("jreHome = ", jreHome)
+	jrePath := nulsWalletPath + Separator + "Libraries" + Separator + "JAVA" + Separator + "JRE" + Separator + "11.0.2"
+
+	if exist,_ := util.PathExists(jrePath); exist {
+		os.RemoveAll(jrePath)
+	}
+
+	log.Println("start copy the jre home to dir of : ", jrePath)
+	util.CopyDir(jreHome, jrePath)
+	log.Println("copy the jre home success.")
 }
 
 func doCopyModule(moduleName string, modulePath string, moduleVersion string) {
@@ -420,18 +488,7 @@ func copyScripts(moduleName string, modulePath string, moduleVersion string, des
 	//如果模块目录下存在script文件夹，则拷贝文件夹下的内容，否则拷贝start,stop脚本
 	exist, _ := util.PathExists(modulePath + Separator + "script")
 	if exist {
-		util.CopyDir(modulePath + Separator + "script", destDir)
-
-		//sysType := runtime.GOOS
-		//cmd := "bash"
-		//args := []string {"-c", "chmod u+x " + destDir + "start"}
-		//if sysType == "windows" {
-		//	// windows系统
-		//	cmd = "cmd.exe"
-		//	args = []string {"/C", "cd .. && mvn clean package -Dmaven.test.skip=true"}
-		//}
-		//util.Command(cmd, args)
-
+		util.CopyExecDir(modulePath + Separator + "script", destDir)
 		return
 	}
 
@@ -472,32 +529,18 @@ func copyScripts(moduleName string, modulePath string, moduleVersion string, des
 	newStartBatTempContent = strings.Replace(newStartBatTempContent, "%JOPT_MAXMETASPACESIZE%", JOPT_MAXMETASPACESIZE, -1)
 	newStartBatTempContent = strings.Replace(newStartBatTempContent, "%JAVA_OPTS%", "", -1)
 
-	ioutil.WriteFile(destDir + "start", []byte(newStartTempContent), 0666)
-	ioutil.WriteFile(destDir + "start.bat", []byte(newStartBatTempContent), 0666)
+	ioutil.WriteFile(destDir + "start", []byte(newStartTempContent), 0777)
+	ioutil.WriteFile(destDir + "start.bat", []byte(newStartBatTempContent), 0777)
 
 	stopTempContent, _ := util.ReadAllIntoMemory(buildPath + Separator + "stop-temp")
 	newStopTempContent := string(stopTempContent)
 	newStopTempContent = strings.Replace(newStopTempContent, "%APP_NAME%", APP_NAME, -1)
-	ioutil.WriteFile(destDir + "stop", []byte(newStopTempContent), 0666)
+	ioutil.WriteFile(destDir + "stop", []byte(newStopTempContent), 0777)
 
 	stopBatTempContent, _ := util.ReadAllIntoMemory(buildPath + Separator + "stop-temp.bat")
 	newStopBatTempContent := string(stopBatTempContent)
 	newStopBatTempContent = strings.Replace(newStopBatTempContent, "%APP_NAME%", APP_NAME, -1)
-	ioutil.WriteFile(destDir + "stop.bat", []byte(newStopBatTempContent), 0666)
-
-	// 修改start和stop文件的权限
-	sysType := runtime.GOOS
-	cmd := "bash"
-	args := []string {"-c", "chmod u+x " + destDir + "start"}
-	if sysType == "windows" {
-		// windows系统
-		cmd = "cmd.exe"
-		args = []string {"/C", ""}
-	}
-	util.Command(cmd, args)
-
-	args = []string {"-c", "chmod u+x " + destDir + "stop"}
-	util.Command(cmd, args)
+	ioutil.WriteFile(destDir + "stop.bat", []byte(newStopBatTempContent), 0777)
 
 	log.Println("copy scripts complete!")
 }
@@ -522,27 +565,18 @@ func findModulePath(baseDir string, moduleName string) (string, string) {
 
 			if fi.Name() == "module.ncf" {
 
-				cfg, err := config.LoadConfigFile(baseDir + Separator + fi.Name())
-				if err == nil && cfg.HasSection("JAVA") {
-					options,err := cfg.SectionOptions("JAVA")
-					if err == nil {
-						for _,v := range options {
-							if v == "APP_NAME" {
-								optionValue,err := cfg.String("JAVA",v)
-								if err == nil && optionValue == moduleName {
-									path = baseDir
-									version, _ = cfg.String("JAVA", "VERSION")
-									return path, version
-								}
-							}
-						}
-					}
+				cfg, _ := config.LoadConfigFile(baseDir + Separator + fi.Name())
+				moduleN, _ := cfg.String("JAVA", "APP_NAME")
+				moduleV, _ := cfg.String("JAVA", "VERSION")
+
+				if moduleName == moduleN {
+					return baseDir, moduleV
 				}
-				return path, version
+				return "", ""
 			}
 		}
 	}
-	return path, version
+	return "", ""
 }
 
 func doTar() {

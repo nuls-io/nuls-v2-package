@@ -9,7 +9,7 @@ func init() {
 	flags = append(flags, masterBranchFlag)
 	flags = append(flags, outputDirFlag)
 	flags = append(flags, outputNameFlag)
-	flags = append(flags, javaHomeFlag)
+	//flags = append(flags, javaHomeFlag)
 	flags = append(flags, jreFlag)
 	flags = append(flags, makeTarFlag)
 	flags = append(flags, skipMvnPackageFlag)
@@ -47,15 +47,15 @@ var outputNameFlag = &cli.StringFlag{
 	Value: "",
 }
 
-var javaHomeFlag = &cli.StringFlag{
-	Name:  "j",
-	Usage: "-j JAVA_HOME",
-	Value: "",
-}
+//var javaHomeFlag = &cli.BoolFlag{
+//	Name:  "j",
+//	Usage: "-j 打包程序将会把系统变量里的JAVA_HOME/jre目录复制到程序依赖中",
+//	Value: false,
+//}
 
 var jreFlag = &cli.StringFlag{
-	Name:  "J",
-	Usage: "-J 输出的jre目录，脚本将会把这个目录复制到程序依赖中",
+	Name:  "j",
+	Usage: "-j 输出的jre目录，打包程序将会把这个目录复制到程序依赖中",
 	Value: "",
 }
 

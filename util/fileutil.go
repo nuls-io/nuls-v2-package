@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -63,13 +64,13 @@ func compress(file *os.File, prefix string, tw *tar.Writer) error {
 		return err
 	}
 	if info.IsDir() {
-		prefix = prefix + Separator + info.Name()
+		prefix = prefix + "/" + info.Name()
 		fileInfos, err := file.Readdir(-1)
 		if err != nil {
 			return err
 		}
 		for _, fi := range fileInfos {
-			f, err := os.Open(file.Name() + Separator + fi.Name())
+			f, err := os.Open(file.Name() + "/" + fi.Name())
 			if err != nil {
 				return err
 			}
@@ -80,7 +81,7 @@ func compress(file *os.File, prefix string, tw *tar.Writer) error {
 		}
 	} else {
 		header, err := tar.FileInfoHeader(info, "")
-		header.Name = prefix + Separator + header.Name
+		header.Name = prefix + "/" + header.Name
 		if err != nil {
 			return err
 		}
@@ -196,6 +197,56 @@ func CopyDir(srcPath string, destPath string) error {
 	return err
 }
 
+/**
+ * 拷贝文件夹,同时拷贝文件夹中的文件
+ * @param srcPath  		需要拷贝的文件夹路径: D:/test
+ * @param destPath		拷贝到的位置: D:/backup/
+ */
+func CopyExecDir(srcPath string, destPath string) error {
+	//检测目录正确性
+	if srcInfo, err := os.Stat(srcPath); err != nil {
+		fmt.Println(err.Error())
+		return err
+	} else {
+		if !srcInfo.IsDir() {
+			e := errors.New("srcPath不是一个正确的目录！")
+			fmt.Println(e.Error())
+			return e
+		}
+	}
+	if destInfo, err := os.Stat(destPath); err != nil {
+		if os.IsNotExist(err) {
+			os.MkdirAll(destPath, 0755)
+		} else {
+			fmt.Println(err.Error())
+			return err
+		}
+	} else {
+		if !destInfo.IsDir() {
+			e := errors.New("destInfo不是一个正确的目录！")
+			fmt.Println(e.Error())
+			return e
+		}
+	}
+
+	err := filepath.Walk(srcPath, func(path string, f os.FileInfo, err error) error {
+		if f == nil {
+			return err
+		}
+		if !f.IsDir() {
+			//path := strings.Replace(path, "\\", "/", -1)
+			destNewPath := strings.Replace(path, srcPath, destPath, -1)
+			fmt.Println("复制文件:" + path + " 到 " + destNewPath)
+			CopyExecFile(path, destNewPath)
+		}
+		return nil
+	})
+	if err != nil {
+		fmt.Printf(err.Error())
+	}
+	return err
+}
+
 //生成目录并拷贝文件
 func CopyFile(src, dest string) (w int64, err error) {
 	srcFile, err := os.Open(src)
@@ -250,4 +301,9 @@ func ReadAllIntoMemory(filename string) (content []byte, err error) {
 		return nil, err
 	}
 	return buffer, nil
+}
+
+func CopyExecFile(file, desc string) {
+	content, _ := ReadAllIntoMemory(file)
+	ioutil.WriteFile(desc, content, 0777)
 }
